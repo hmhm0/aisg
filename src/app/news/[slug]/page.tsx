@@ -198,6 +198,19 @@ export default async function StoryPage({ params }: Props) {
           </div>
         </div>
 
+        <div className="mt-6 rounded-[1.25rem] border border-amber-200/70 bg-amber-50/60 px-5 py-3 text-sm leading-6 text-slate-700">
+          This story is summarised from coverage by{" "}
+          <span className="font-semibold text-slate-950">{post.source}</span>. Read the{" "}
+          <a
+            href={post.link}
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-slate-950 underline underline-offset-2 transition hover:text-slate-700"
+          >
+            original article →
+          </a>
+        </div>
+
         <div className={["mt-8 grid gap-6", hasImage ? "lg:grid-cols-[1.2fr_0.8fr]" : ""].join(" ")}>
           <div className="space-y-4">
             <p className="text-xs uppercase tracking-[0.28em] text-slate-500">
@@ -226,16 +239,20 @@ export default async function StoryPage({ params }: Props) {
           </div>
 
           <aside className="space-y-4">
-            <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Source link</p>
+            <div className="rounded-[1.5rem] border border-stone-200 bg-stone-50 p-5">
+              <p className="text-xs uppercase tracking-[0.24em] text-slate-500">Originally published by</p>
+              <p className="mt-2 text-base font-semibold text-slate-950">{post.source}</p>
               <a
                 href={post.link}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-3 inline-flex break-all text-sm text-slate-900 transition hover:text-slate-700"
+                className="mt-4 inline-flex items-center gap-1 break-all text-sm text-slate-900 underline underline-offset-2 transition hover:text-slate-700"
               >
-                Open original article
+                Read the original article →
               </a>
+              <p className="mt-3 text-xs leading-5 text-slate-500">
+                AISG provides a short editorial summary. Full reporting and credit belong to the original publisher.
+              </p>
             </div>
           </aside>
         </div>

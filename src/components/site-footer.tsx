@@ -85,6 +85,12 @@ export function SiteFooter() {
             <Link href="/newsletter" className="transition hover:text-slate-950">
               Newsletter
             </Link>
+            <Link href="/privacy" className="transition hover:text-slate-950">
+              Privacy
+            </Link>
+            <Link href="/terms" className="transition hover:text-slate-950">
+              Terms
+            </Link>
           </div>
         </div>
       </div>

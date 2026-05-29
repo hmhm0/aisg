@@ -30,6 +30,14 @@ export const SITE_LOCALE = "en_SG";
 export const DEFAULT_OG_IMAGE = "/news-images/placeholder-news.svg";
 
 /**
+ * Contact and editorial metadata, kept here so legal pages and structured
+ * data stay in sync. Update in one place when these change.
+ */
+export const SITE_CONTACT_EMAIL = "hello@aisg.news";
+export const SITE_LAUNCH_YEAR = 2026;
+export const SITE_LAST_UPDATED = "2026-05-29";
+
+/**
  * Build an absolute URL from a path. Accepts both already-absolute URLs
  * (returned unchanged) and root-relative paths starting with "/".
  */
