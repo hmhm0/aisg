@@ -55,6 +55,7 @@ export function StoryCard({ post, featured = false }: Props) {
                 alt={post.title}
                 className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
                 loading="eager"
+                sizes="(max-width: 1024px) 100vw, 50vw"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white/20 via-transparent to-transparent" />
             </div>
@@ -66,6 +67,7 @@ export function StoryCard({ post, featured = false }: Props) {
                 src={post.image}
                 alt={post.title}
                 className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                sizes="(max-width: 768px) 100vw, (max-width: 1280px) 50vw, 400px"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-white/15 via-transparent to-transparent" />
             </div>

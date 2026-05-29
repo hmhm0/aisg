@@ -208,12 +208,13 @@ export default async function StoryPage({ params }: Props) {
           </div>
 
           {hasImage ? (
-            <div className="overflow-hidden rounded-[1.75rem] border border-stone-200 bg-stone-100">
+            <div className="relative aspect-[4/3] overflow-hidden rounded-[1.75rem] border border-stone-200 bg-stone-100 lg:aspect-auto lg:min-h-[280px]">
               <NewsImage
                 src={post.image}
                 alt={post.title}
-                className="h-full min-h-[220px] w-full object-cover"
+                className="object-cover"
                 loading="eager"
+                sizes="(max-width: 1024px) 100vw, 40vw"
               />
             </div>
           ) : null}

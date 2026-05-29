@@ -126,6 +126,7 @@ function CompactRead({ post }: { post: NewsPost }) {
           src={post.image}
           alt={post.title}
           className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+          sizes="64px"
         />
       </div>
 
