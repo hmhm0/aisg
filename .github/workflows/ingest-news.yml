@@ -2,8 +2,8 @@ name: Ingest News Articles
 
 on:
   schedule:
-    # Run every 6 hours (0:00, 6:00, 12:00, 18:00 UTC)
-    - cron: '0 0,6,12,18 * * *'
+    # Run every 2 hours (0:00, 2:00, 4:00, 6:00, 8:00, 10:00, 12:00, 14:00, 16:00, 18:00, 20:00, 22:00 UTC)
+    - cron: '0 */2 * * *'
   workflow_dispatch:
     # Allow manual trigger from GitHub Actions UI
 
