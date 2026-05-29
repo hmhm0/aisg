@@ -5,6 +5,7 @@ import { ArticleEngagementTracker } from "@/components/article-engagement-tracke
 import { RelatedStories } from "@/components/related-stories";
 import { NewsImage } from "@/components/news-image";
 import { getDisplayPublishedAt, getPostBySlug, getPosts } from "@/lib/news";
+import { absoluteUrl, DEFAULT_OG_IMAGE, SITE_LOCALE, SITE_NAME } from "@/lib/site";
 
 type Props = {
   params: Promise<{
@@ -92,9 +93,42 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
 
+  const canonicalPath = `/news/${post.slug}`;
+  const articleUrl = absoluteUrl(canonicalPath);
+  const ogImage = post.image || DEFAULT_OG_IMAGE;
+  const publishedTime = post.publishedAt || post.date;
+  const ogTitle = post.title;
+  const ogDescription = post.excerpt;
+
   return {
-    title: `${post.title} | Singapore AI & Tech News`,
-    description: post.excerpt
+    title: ogTitle,
+    description: ogDescription,
+    keywords: post.tags,
+    alternates: {
+      canonical: canonicalPath
+    },
+    openGraph: {
+      type: "article",
+      locale: SITE_LOCALE,
+      url: articleUrl,
+      siteName: SITE_NAME,
+      title: ogTitle,
+      description: ogDescription,
+      publishedTime,
+      tags: post.tags,
+      images: [
+        {
+          url: ogImage,
+          alt: post.title
+        }
+      ]
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ogTitle,
+      description: ogDescription,
+      images: [ogImage]
+    }
   };
 }
 
@@ -107,8 +141,47 @@ export default async function StoryPage({ params }: Props) {
     notFound();
   }
 
+  const articleUrl = absoluteUrl(`/news/${post.slug}`);
+  const articleImage = absoluteUrl(post.image || DEFAULT_OG_IMAGE);
+  const publishedIso = (() => {
+    const raw = post.publishedAt || post.date;
+    const parsed = new Date(raw);
+    return Number.isNaN(parsed.getTime()) ? raw : parsed.toISOString();
+  })();
+
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "NewsArticle",
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": articleUrl
+    },
+    headline: post.title,
+    description: post.excerpt,
+    image: [articleImage],
+    datePublished: publishedIso,
+    dateModified: publishedIso,
+    author: {
+      "@type": "Organization",
+      name: post.source
+    },
+    publisher: {
+      "@type": "Organization",
+      name: SITE_NAME,
+      url: absoluteUrl("/")
+    },
+    keywords: post.tags.join(", "),
+    isAccessibleForFree: true,
+    inLanguage: "en-SG"
+  };
+
   return (
     <main className="mx-auto min-h-screen max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+      <script
+        type="application/ld+json"
+        // Structured data for Google rich results. Stringified once at render time.
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <article className="rounded-[2.25rem] border border-stone-200 bg-white p-6 shadow-[0_18px_60px_rgba(15,23,42,0.06)] sm:p-8">
         <ArticleEngagementTracker slug={post.slug} />
 

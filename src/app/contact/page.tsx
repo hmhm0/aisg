@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "Contact | Singapore AI & Tech News",
-  description: "Get in touch with tips, story suggestions, corrections, or collaboration ideas for Singapore's AI and technology news platform."
+  description: "Get in touch with tips, story suggestions, corrections, or collaboration ideas for Singapore's AI and technology news platform.",
+  alternates: { canonical: "/contact" }
 };
 
 export default function ContactPage() {

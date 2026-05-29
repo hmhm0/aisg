@@ -3,7 +3,8 @@ import { NewsletterForm } from "@/components/newsletter-form";
 
 export const metadata = {
   title: "Newsletter | Singapore AI & Tech News",
-  description: "Subscribe to our daily newsletter for curated Singapore AI, tech, startup, and GovTech news delivered to your inbox."
+  description: "Subscribe to our daily newsletter for curated Singapore AI, tech, startup, and GovTech news delivered to your inbox.",
+  alternates: { canonical: "/newsletter" }
 };
 
 const highlights = [

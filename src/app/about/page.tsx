@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "About | Singapore AI & Tech News",
-  description: "Learn about AISG: a curated platform for Singapore's AI, GovTech, startup, and technology news. Clean, editorial coverage focused on clarity and relevance."
+  description: "Learn about AISG: a curated platform for Singapore's AI, GovTech, startup, and technology news. Clean, editorial coverage focused on clarity and relevance.",
+  alternates: { canonical: "/about" }
 };
 
 export default function AboutPage() {

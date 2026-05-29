@@ -4,7 +4,8 @@ import { getPosts, getTagCounts } from "@/lib/news";
 
 export const metadata = {
   title: "Search | Singapore AI & Tech News",
-  description: "Search Singapore's AI, technology, startup, and GovTech news archive by keyword, source, topic, or date."
+  description: "Search Singapore's AI, technology, startup, and GovTech news archive by keyword, source, topic, or date.",
+  alternates: { canonical: "/search" }
 };
 
 export default function SearchPage() {

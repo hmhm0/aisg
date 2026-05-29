@@ -6,7 +6,9 @@ type Props = {
 
 export const metadata = {
   title: "Thanks for Subscribing | Singapore AI & Tech News",
-  description: "You've successfully subscribed to Singapore's leading AI and tech news newsletter."
+  description: "You've successfully subscribed to Singapore's leading AI and tech news newsletter.",
+  alternates: { canonical: "/newsletter/thanks" },
+  robots: { index: false, follow: true }
 };
 
 export default async function NewsletterThanksPage({ searchParams }: Props) {

@@ -17,7 +17,8 @@ function clampPage(value: string | undefined, totalPages: number) {
 
 export const metadata = {
   title: "Archive | Singapore AI & Tech News",
-  description: "Browse the complete archive of Singapore AI, technology, startup, and GovTech news stories. Filter by topic, date, and source."
+  description: "Browse the complete archive of Singapore AI, technology, startup, and GovTech news stories. Filter by topic, date, and source.",
+  alternates: { canonical: "/archive" }
 };
 
 export default async function ArchivePage({ searchParams }: Props) {
