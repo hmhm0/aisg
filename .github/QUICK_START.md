@@ -12,7 +12,7 @@ git push -u origin main
 ### 2. Add GitHub Secrets
 Go to **Settings** → **Secrets and variables** → **Actions** → **New repository secret**
 
-Add these 5 secrets:
+Add these 4 secrets:
 
 **RSS_FEEDS**
 ```
@@ -29,15 +29,12 @@ singapore,sg,s'pore,ai,artificial intelligence,tech,technology,startup,fintech,p
 https://newsapi.org/v2/everything
 ```
 
-**NEWS_API_KEY** (optional - get from newsapi.org)
-```
-your_api_key_here
-```
-
 **NEWS_API_QUERY** (optional)
 ```
 Singapore AI technology startup fintech govtech cybersecurity
 ```
+
+**Note**: Skip `NEWS_API_KEY` - it's optional and only needed if you have a NewsAPI key. The 7 RSS feeds are sufficient.
 
 ### 3. Enable Workflow
 - Go to **Actions** tab

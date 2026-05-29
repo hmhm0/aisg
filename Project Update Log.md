@@ -2,6 +2,21 @@
 
 This document tracks the progress and key updates for the Singapore AI & Tech News Platform project.
 
+## 2026-05-29 (GitHub Repository & Git Setup Complete)
+
+*   **Git Repository Initialized**: Project converted to a git repository with all 187 files committed
+*   **Initial Commit Created**: All project files, workflows, and documentation committed with message "Initial commit: Singapore AI & Tech News Platform"
+*   **Git Configured**: User email (haomingx3@gmail.com) and name (hmhm0) configured for commits
+*   **Branch Renamed**: Master branch renamed to `main` for GitHub compatibility
+*   **Code Pushed to GitHub**: All commits successfully pushed to https://github.com/hmhm0/aisg
+*   **GitHub Actions Workflow Ready**: `.github/workflows/ingest-news.yml` is now available in the repository
+*   **Setup Documentation Created**: Added `GITHUB_SETUP_COMPLETE.md` with step-by-step instructions for:
+    - Adding 5 GitHub Secrets (RSS_FEEDS, NEWS_KEYWORDS, NEWS_API_URL, NEWS_API_KEY, NEWS_API_QUERY)
+    - Enabling GitHub Actions workflow
+    - Testing the workflow manually
+    - Verifying articles are being ingested
+*   **Next Steps**: User needs to add GitHub Secrets and enable the workflow to start automated ingestion
+
 ## 2026-05-29 (Card Tag Positioning Fix - Revised)
 
 *   **Issue Identified**: Some latest news cards had awkward spacing above tags while others had tags properly at the bottom
