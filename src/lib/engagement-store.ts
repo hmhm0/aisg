@@ -5,82 +5,115 @@
  * are stored in an Upstash Redis sorted set (durable, serverless-safe).
  *
  * Otherwise, falls back to the local NDJSON file for development.
+ *
+ * Critically: every Redis call is wrapped so that a backend failure never
+ * 500s a page render. Engagement is a "nice to have" enrichment, not a
+ * critical-path dependency.
  */
 
+import { Redis } from "@upstash/redis";
+import fs from "node:fs/promises";
+import path from "node:path";
 import type { EngagementEvent } from "@/lib/engagement";
 
 // ---------------------------------------------------------------------------
 // Redis backend
 // ---------------------------------------------------------------------------
 
-function getRedisClient() {
+const REDIS_KEY = "engagement:views";
+
+let cachedRedis: Redis | null | undefined;
+
+function getRedisClient(): Redis | null {
+  if (cachedRedis !== undefined) return cachedRedis;
+
   const url = process.env.UPSTASH_REDIS_REST_URL;
   const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
   if (!url || !token) {
+    cachedRedis = null;
     return null;
   }
 
-  // Lazy-import to avoid bundling when not used
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { Redis } = require("@upstash/redis") as typeof import("@upstash/redis");
-  return new Redis({ url, token });
-}
+  try {
+    cachedRedis = new Redis({ url, token });
+  } catch (error) {
+    console.warn("Failed to construct Upstash Redis client; falling back to no-op.", error);
+    cachedRedis = null;
+  }
 
-const REDIS_KEY = "engagement:views";
+  return cachedRedis;
+}
 
 async function redisRecord(slug: string): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
 
-  const event: EngagementEvent = { slug, at: new Date().toISOString() };
-  // Score = unix timestamp in ms for range queries
-  await redis.zadd(REDIS_KEY, { score: Date.now(), member: JSON.stringify(event) });
+  try {
+    const event: EngagementEvent = { slug, at: new Date().toISOString() };
+    await redis.zadd(REDIS_KEY, { score: Date.now(), member: JSON.stringify(event) });
+  } catch (error) {
+    console.warn("Redis zadd failed; engagement event dropped.", error);
+  }
 }
 
 async function redisLoad(sinceDaysAgo: number): Promise<EngagementEvent[]> {
   const redis = getRedisClient();
   if (!redis) return [];
 
-  const cutoff = Date.now() - sinceDaysAgo * 24 * 60 * 60 * 1000;
-  const members: string[] = await redis.zrange(REDIS_KEY, cutoff, "+inf", { byScore: true });
+  try {
+    const cutoff = Date.now() - sinceDaysAgo * 24 * 60 * 60 * 1000;
+    const members = (await redis.zrange(REDIS_KEY, cutoff, "+inf", { byScore: true })) as unknown[];
 
-  return members
-    .map((raw) => {
-      try {
-        const parsed = JSON.parse(raw) as Partial<EngagementEvent>;
-        if (typeof parsed.slug === "string" && typeof parsed.at === "string") {
-          return { slug: parsed.slug, at: parsed.at } as EngagementEvent;
+    return members
+      .map((raw) => {
+        try {
+          // Upstash sometimes returns the value already parsed when it
+          // was originally stored as JSON; accept both shapes.
+          const parsed =
+            typeof raw === "string" ? (JSON.parse(raw) as Partial<EngagementEvent>) : (raw as Partial<EngagementEvent>);
+          if (typeof parsed.slug === "string" && typeof parsed.at === "string") {
+            return { slug: parsed.slug, at: parsed.at } as EngagementEvent;
+          }
+        } catch {
+          // skip malformed entries
         }
-      } catch {
-        // skip malformed entries
-      }
-      return undefined;
-    })
-    .filter((e): e is EngagementEvent => Boolean(e));
+        return undefined;
+      })
+      .filter((e): e is EngagementEvent => Boolean(e));
+  } catch (error) {
+    console.warn("Redis zrange failed; returning empty engagement set.", error);
+    return [];
+  }
 }
 
 async function redisPrune(olderThanDays: number): Promise<void> {
   const redis = getRedisClient();
   if (!redis) return;
 
-  const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
-  await redis.zremrangebyscore(REDIS_KEY, 0, cutoff);
+  try {
+    const cutoff = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
+    await redis.zremrangebyscore(REDIS_KEY, 0, cutoff);
+  } catch (error) {
+    console.warn("Redis zremrangebyscore failed; pruning skipped.", error);
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Local NDJSON backend (development fallback)
 // ---------------------------------------------------------------------------
 
-import fs from "node:fs/promises";
-import path from "node:path";
-
 const engagementFilePath = path.join(process.cwd(), "data", "engagement-events.ndjson");
 
 async function localRecord(slug: string): Promise<void> {
-  const event: EngagementEvent = { slug, at: new Date().toISOString() };
-  await fs.mkdir(path.dirname(engagementFilePath), { recursive: true });
-  await fs.appendFile(engagementFilePath, `${JSON.stringify(event)}\n`, "utf8");
+  try {
+    const event: EngagementEvent = { slug, at: new Date().toISOString() };
+    await fs.mkdir(path.dirname(engagementFilePath), { recursive: true });
+    await fs.appendFile(engagementFilePath, `${JSON.stringify(event)}\n`, "utf8");
+  } catch (error) {
+    // On Vercel the filesystem is read-only; treat as best-effort.
+    console.warn("Local engagement record failed (expected on serverless).", error);
+  }
 }
 
 async function localLoad(): Promise<EngagementEvent[]> {
@@ -107,7 +140,7 @@ async function localLoad(): Promise<EngagementEvent[]> {
         ? (error as { code?: string }).code
         : undefined;
     if (code === "ENOENT") return [];
-    throw error;
+    return [];
   }
 }
 
@@ -120,7 +153,9 @@ function isRedisConfigured(): boolean {
 }
 
 /**
- * Record a single article view event.
+ * Record a single article view event. Never throws — engagement is a
+ * non-critical enrichment, so a backend failure should not block rendering
+ * or response.
  */
 export async function storeRecord(slug: string): Promise<void> {
   if (isRedisConfigured()) {
@@ -132,7 +167,8 @@ export async function storeRecord(slug: string): Promise<void> {
 
 /**
  * Load engagement events. When Redis is configured, only fetches events
- * within the given window (default 7 days) for efficiency.
+ * within the given window (default 7 days) for efficiency. Returns an
+ * empty array if the backend is unreachable.
  */
 export async function storeLoad(sinceDaysAgo = 7): Promise<EngagementEvent[]> {
   if (isRedisConfigured()) {

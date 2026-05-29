@@ -7,7 +7,7 @@
  * back to the current Vercel URL.
  */
 
-const FALLBACK_SITE_URL = "https://aisg-vert.vercel.app";
+const FALLBACK_SITE_URL = "https://aisgs.vercel.app";
 
 function normaliseUrl(value: string) {
   return value.replace(/\/+$/, "");
