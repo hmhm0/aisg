@@ -7,7 +7,7 @@ tags:
   - Singapore
 source: "Vulcan Post"
 link: "https://vulcanpost.com/911395/meta-layoff-singapore-2026/"
-image: "https://vulcanpost.com//911395//meta-layoff-singapore-2026//"
+image: "/news-images/2026-05-20032531000-meta-cuts-8k-jobs-worldwide-singapore-staff-wake-to-4am-termination-e-mails-e00a71a0.jpg"
 featured: false
 ---
 
