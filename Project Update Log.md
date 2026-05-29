@@ -2,6 +2,22 @@
 
 This document tracks the progress and key updates for the Singapore AI & Tech News Platform project.
 
+## 2026-05-29 (Vercel Deployment Complete)
+
+*   **Site Deployed to Vercel**: The site is now live and accessible via Vercel's hosting platform
+*   **Environment Variables Configured**: Added 4 environment variables in Vercel:
+    - `RSS_FEEDS` (8 sources including Vulcan Post, HardwareZone, OpenGov Asia, CNA, Microsoft Singapore, Mothership.sg, and Straits Times via Google News)
+    - `NEWS_KEYWORDS` (40+ Singapore tech and AI relevance keywords)
+    - `NEWS_API_URL` (NewsAPI endpoint for fallback)
+    - `NEWS_API_QUERY` (Singapore-focused search query)
+*   **Auto-Deploy Pipeline Active**: Complete automation chain now in place:
+    - GitHub Actions runs every 2 hours
+    - New articles committed to GitHub repository
+    - Vercel detects the push and automatically rebuilds
+    - Live site updates with fresh content
+*   **No Manual Intervention Required**: Once running, the site grows automatically with fresh Singapore tech and AI news
+*   **Note**: A `npx plugins add vercel/vercel-plugin` command was run but did not affect the project (Vercel handles Next.js natively without plugins)
+
 ## 2026-05-29 (GitHub Repository & Git Setup Complete)
 
 *   **Git Repository Initialized**: Project converted to a git repository with all 187 files committed
