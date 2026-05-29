@@ -639,6 +639,60 @@ async function saveStory(story) {
   return { slug, created: true };
 }
 
+/**
+ * Return the SHA1 hash portion of every existing markdown filename.
+ * The slug format is `${date}-${slug-title}-${hash8}.md`, where the
+ * hash is derived from the article link. Comparing the link's hash
+ * lets us cheaply skip articles already on disk without re-fetching.
+ */
+async function loadExistingLinkHashes() {
+  try {
+    const files = await fs.readdir(contentDir);
+    const hashes = new Set();
+    for (const file of files) {
+      if (!file.endsWith(".md")) continue;
+      const match = file.match(/-([a-f0-9]{8})\.md$/);
+      if (match) hashes.add(match[1]);
+    }
+    return hashes;
+  } catch (error) {
+    const code = typeof error === "object" && error && "code" in error ? error.code : undefined;
+    if (code === "ENOENT") return new Set();
+    throw error;
+  }
+}
+
+function linkHash(link, fallbackTitle = "") {
+  return createHash("sha1").update(link || fallbackTitle).digest("hex").slice(0, 8);
+}
+
+/**
+ * Run an async mapper across `items` with a bounded number of in-flight
+ * tasks. Keeps networks happy while still letting independent fetches
+ * overlap — the source of most ingest wall-clock time.
+ */
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+
+  async function worker() {
+    while (true) {
+      const index = cursor;
+      cursor += 1;
+      if (index >= items.length) return;
+      try {
+        results[index] = await mapper(items[index], index);
+      } catch (error) {
+        results[index] = { __error: error };
+      }
+    }
+  }
+
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
 function normalizeRssItem(item) {
   const title = item.title?.trim();
   const link = item.link?.trim();
@@ -1041,19 +1095,33 @@ async function buildStoryFromUrl({ url, sourceName, fallbackTitle = "", fallback
   };
 }
 
-async function ingestRssFeeds() {
+async function ingestRssFeeds(knownHashes) {
   const stories = [];
+  let skipped = 0;
 
   for (const feedUrl of RSS_FEEDS) {
     try {
       const feed = await parser.parseURL(feedUrl);
       const feedName = feed.title || feedUrl;
 
-      for (const item of feed.items.slice(0, 12)) {
-        const title = item.title?.trim();
-        const link = item.link?.trim();
-        if (!title || !link) continue;
+      const candidates = feed.items
+        .slice(0, 12)
+        .map((item) => ({
+          item,
+          title: item.title?.trim(),
+          link: item.link?.trim()
+        }))
+        .filter(({ title, link }) => title && link);
 
+      const fresh = candidates.filter(({ link, title }) => {
+        if (knownHashes.has(linkHash(link, title))) {
+          skipped += 1;
+          return false;
+        }
+        return true;
+      });
+
+      const built = await mapWithConcurrency(fresh, 5, async ({ item, title, link }) => {
         const builtStory = await buildStoryFromUrl({
           url: link,
           sourceName: feedName,
@@ -1063,11 +1131,13 @@ async function ingestRssFeeds() {
         });
 
         if (builtStory.title && isSingaporeTechStory(`${builtStory.title} ${builtStory.excerpt}`, builtStory.source, builtStory.link)) {
-          stories.push({
-            ...builtStory,
-            source: feedName
-          });
+          return { ...builtStory, source: feedName };
         }
+        return null;
+      });
+
+      for (const result of built) {
+        if (result && !result.__error) stories.push(result);
       }
     } catch (error) {
       console.warn(`RSS feed failed: ${feedUrl}`);
@@ -1075,11 +1145,16 @@ async function ingestRssFeeds() {
     }
   }
 
+  if (skipped > 0) {
+    console.log(`RSS: skipped ${skipped} already-ingested article(s).`);
+  }
+
   return stories;
 }
 
-async function ingestPageSources() {
+async function ingestPageSources(knownHashes) {
   const stories = [];
+  let skipped = 0;
 
   for (const source of PAGE_SOURCES) {
     try {
@@ -1104,7 +1179,15 @@ async function ingestPageSources() {
 
       const uniqueLinks = Array.from(new Set(links)).slice(0, source.limit || 12);
 
-      for (const link of uniqueLinks) {
+      const fresh = uniqueLinks.filter((link) => {
+        if (knownHashes.has(linkHash(link, source.name))) {
+          skipped += 1;
+          return false;
+        }
+        return true;
+      });
+
+      const built = await mapWithConcurrency(fresh, 5, async (link) => {
         const builtStory = await buildStoryFromUrl({
           url: link,
           sourceName: source.name,
@@ -1113,11 +1196,13 @@ async function ingestPageSources() {
         });
 
         if (builtStory.title && isSingaporeTechStory(`${builtStory.title} ${builtStory.excerpt}`, builtStory.source, builtStory.link)) {
-          stories.push({
-            ...builtStory,
-            source: builtStory.source || source.name
-          });
+          return { ...builtStory, source: builtStory.source || source.name };
         }
+        return null;
+      });
+
+      for (const result of built) {
+        if (result && !result.__error) stories.push(result);
       }
     } catch (error) {
       console.warn(`Page source failed: ${source.url}`);
@@ -1125,10 +1210,14 @@ async function ingestPageSources() {
     }
   }
 
+  if (skipped > 0) {
+    console.log(`Page sources: skipped ${skipped} already-ingested article(s).`);
+  }
+
   return stories;
 }
 
-async function ingestNewsApiFallback() {
+async function ingestNewsApiFallback(knownHashes) {
   if (!NEWS_API_KEY) {
     return [];
   }
@@ -1150,37 +1239,42 @@ async function ingestNewsApiFallback() {
   const json = await response.json();
   const articles = Array.isArray(json.articles) ? json.articles : [];
 
-  return Promise.all(
-    articles
-      .filter((article) => article?.title && article?.url)
-      .filter((article) => isSingaporeTechStory(`${article.title} ${article.description || ""}`, String(article.source?.name || ""), String(article.url)))
-      .map(async (article) => {
-        const timestamp = normalizeTimestampForStorage(article.publishedAt || Date.now());
+  const candidates = articles
+    .filter((article) => article?.title && article?.url)
+    .filter((article) => isSingaporeTechStory(`${article.title} ${article.description || ""}`, String(article.source?.name || ""), String(article.url)))
+    .filter((article) => {
+      if (knownHashes.has(linkHash(String(article.url), article.title))) {
+        return false;
+      }
+      return true;
+    });
 
-        return {
-          title: article.title.trim(),
-          date: timestamp.date || new Date().toISOString(),
-          publishedAt: timestamp.publishedAt || timestamp.date,
-          excerpt: String(article.description || article.content || article.title).replace(/\s+/g, " ").trim().slice(0, 220),
-          tags: deriveTags(`${article.title} ${article.description || article.content || ""}`, String(article.source?.name || "")),
-          source: String(article.source?.name || "News API"),
-          link: String(article.url),
-          image: await persistRemoteImage(
-            String(article.urlToImage || (await extractImageUrl(article.url)) || ""),
-            uniqueSlug(timestamp.date || timestamp.publishedAt || new Date().toISOString(), article.title, article.url),
-            String(article.url)
-          ),
-          body: [
-            `## Summary`,
-            String(article.description || article.content || article.title),
-            `## Why it matters`,
-            `This fallback item was collected through the News API layer because it matched the Singapore tech keyword filter.`,
-            `## Source`,
-            String(article.url)
-          ].join("\n\n")
-        };
-      })
-  );
+  return mapWithConcurrency(candidates, 5, async (article) => {
+    const timestamp = normalizeTimestampForStorage(article.publishedAt || Date.now());
+
+    return {
+      title: article.title.trim(),
+      date: timestamp.date || new Date().toISOString(),
+      publishedAt: timestamp.publishedAt || timestamp.date,
+      excerpt: String(article.description || article.content || article.title).replace(/\s+/g, " ").trim().slice(0, 220),
+      tags: deriveTags(`${article.title} ${article.description || article.content || ""}`, String(article.source?.name || "")),
+      source: String(article.source?.name || "News API"),
+      link: String(article.url),
+      image: await persistRemoteImage(
+        String(article.urlToImage || (await extractImageUrl(article.url)) || ""),
+        uniqueSlug(timestamp.date || timestamp.publishedAt || new Date().toISOString(), article.title, article.url),
+        String(article.url)
+      ),
+      body: [
+        `## Summary`,
+        String(article.description || article.content || article.title),
+        `## Why it matters`,
+        `This fallback item was collected through the News API layer because it matched the Singapore tech keyword filter.`,
+        `## Source`,
+        String(article.url)
+      ].join("\n\n")
+    };
+  }).then((results) => results.filter((r) => r && !r.__error));
 }
 
 function dedupeStories(stories) {
@@ -1198,10 +1292,13 @@ function dedupeStories(stories) {
 async function main() {
   await ensureContentDir();
 
+  const knownHashes = await loadExistingLinkHashes();
+  console.log(`Found ${knownHashes.size} previously ingested article(s); these will be skipped.`);
+
   const [rssStories, pageStories, apiStories] = await Promise.all([
-    ingestRssFeeds(),
-    ingestPageSources(),
-    ingestNewsApiFallback()
+    ingestRssFeeds(knownHashes),
+    ingestPageSources(knownHashes),
+    ingestNewsApiFallback(knownHashes)
   ]);
   const stories = dedupeStories([...rssStories, ...pageStories, ...apiStories]);
 
