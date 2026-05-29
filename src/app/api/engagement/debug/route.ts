@@ -1,54 +1,84 @@
 import { NextResponse } from "next/server";
-import { storeLoad, storeRecord } from "@/lib/engagement-store";
+import { Redis } from "@upstash/redis";
 
 export const runtime = "nodejs";
 
 /**
- * TEMPORARY diagnostic endpoint. Reports whether the engagement
- * persistence layer is configured and whether a round-trip read+write
- * succeeds. Returns no secrets — only booleans and counts.
+ * TEMPORARY diagnostic endpoint. Bypasses the engagement-store wrapper
+ * and talks to Redis directly so we can isolate where the persistence
+ * is breaking.
  *
  * Remove this file once Redis wiring is verified in production.
  */
 export async function GET() {
-  const hasUrl = Boolean(process.env.UPSTASH_REDIS_REST_URL);
-  const hasToken = Boolean(process.env.UPSTASH_REDIS_REST_TOKEN);
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
 
-  // Prefix that uniquely identifies a debug ping so we can distinguish
-  // it from real traffic and verify the round-trip.
-  const debugSlug = `__debug-${Date.now()}`;
-
-  let writeError: string | null = null;
-  let readError: string | null = null;
-  let readCount = 0;
-  let foundDebug = false;
-
-  try {
-    await storeRecord(debugSlug);
-  } catch (error) {
-    writeError = error instanceof Error ? error.message : String(error);
+  if (!url || !token) {
+    return NextResponse.json({
+      config: { hasUrl: Boolean(url), hasToken: Boolean(token) },
+      error: "Env vars missing"
+    });
   }
 
+  const redis = new Redis({ url, token });
+  const REDIS_KEY = "engagement:views";
+
+  const result: Record<string, unknown> = {
+    config: { hasUrl: true, hasToken: true, urlLooksValid: url.startsWith("https://") }
+  };
+
+  // Step 1: Ping
   try {
-    const events = await storeLoad(1);
-    readCount = events.length;
-    foundDebug = events.some((e) => e.slug === debugSlug);
+    const pong = await redis.ping();
+    result.ping = pong;
   } catch (error) {
-    readError = error instanceof Error ? error.message : String(error);
+    result.pingError = error instanceof Error ? error.message : String(error);
+    return NextResponse.json(result);
   }
 
-  return NextResponse.json({
-    config: {
-      UPSTASH_REDIS_REST_URL: hasUrl,
-      UPSTASH_REDIS_REST_TOKEN: hasToken,
-      backend: hasUrl && hasToken ? "redis" : "local-fallback"
-    },
-    roundTrip: {
-      wrote: debugSlug,
-      readCount,
-      foundDebugInRead: foundDebug,
-      writeError,
-      readError
-    }
-  });
+  // Step 2: How many entries does the sorted set already have?
+  try {
+    result.cardBefore = await redis.zcard(REDIS_KEY);
+  } catch (error) {
+    result.cardBeforeError = error instanceof Error ? error.message : String(error);
+  }
+
+  // Step 3: Write a single test entry
+  const testMember = `__debug-${Date.now()}`;
+  const testScore = Date.now();
+  try {
+    const added = await redis.zadd(REDIS_KEY, { score: testScore, member: testMember });
+    result.zaddResult = added;
+  } catch (error) {
+    result.zaddError = error instanceof Error ? error.message : String(error);
+  }
+
+  // Step 4: How many entries does the sorted set have now?
+  try {
+    result.cardAfter = await redis.zcard(REDIS_KEY);
+  } catch (error) {
+    result.cardAfterError = error instanceof Error ? error.message : String(error);
+  }
+
+  // Step 5: Read back ALL members (no byScore filter) so we can see what's actually stored
+  try {
+    const all = await redis.zrange(REDIS_KEY, 0, -1);
+    result.zrangeAll = all;
+    result.zrangeAllCount = Array.isArray(all) ? all.length : null;
+  } catch (error) {
+    result.zrangeAllError = error instanceof Error ? error.message : String(error);
+  }
+
+  // Step 6: Read back with byScore (the way storeLoad does it)
+  try {
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+    const byScore = await redis.zrange(REDIS_KEY, cutoff, "+inf", { byScore: true });
+    result.zrangeByScore = byScore;
+    result.zrangeByScoreCount = Array.isArray(byScore) ? byScore.length : null;
+  } catch (error) {
+    result.zrangeByScoreError = error instanceof Error ? error.message : String(error);
+  }
+
+  return NextResponse.json(result);
 }
